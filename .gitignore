@@ -1,10 +1,6 @@
-__pycache__
+.idea
 
 *.txt
-*.py
+*.paRSA
 *.pub
-*.parsa
-
-!utils.py
-!file_encriptor.py
-!test_file_encriptor.py
+*.iml

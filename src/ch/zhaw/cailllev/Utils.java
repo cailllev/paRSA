@@ -1,8 +1,14 @@
 package ch.zhaw.cailllev;
 
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.stream.Stream;
+
 import org.mindrot.jbcrypt.*;
 
 public class Utils {
@@ -39,13 +45,14 @@ public class Utils {
     }
 
     protected static void safePrimeBM(int bitlength) {
-        long start = System.currentTimeMillis() / 1000;
-        int bitlengthBM = 2 << 8;  // 256
+        long start = System.currentTimeMillis();
+        int bitlengthBMExp = 8;
+        int bitlengthBM = 2 << bitlengthBMExp;  // 256
 
         safePrime(bitlengthBM);
 
-        long diff = System.currentTimeMillis() / 1000 - start;
-        int estimate = Math.round(diff * (2 << (bitlength >> 8) * 2));
+        int diff = (int) ((System.currentTimeMillis() - start) / 1000);
+        int estimate = diff * (2 << bitlength >> bitlengthBMExp) * 2;
 
         System.out.println("[*] Estimation to create " + 2 + " safe "
                 + bitlength + " bit primes: ~ " + estimate + "s.");
@@ -107,17 +114,17 @@ public class Utils {
             return false;
         }
 
-        if (!password.matches(".*\\d.*")) {
+        if (!password.matches(".*[0-9].*")) {
             System.out.println("[!] Password has to contain at least one number.");
             return false;
         }
 
-        if (!password.matches(".*\"[A-Z]\".*")) {
+        if (!password.matches(".*[A-Z].*")) {
             System.out.println("[!] Password has to contain at least one uppercase character.");
             return false;
         }
 
-        if (!password.matches(".*\"[a-z]\".*")) {
+        if (!password.matches(".*[a-z].*")) {
             System.out.println("[!] Password has to contain at least one lowercase character.");
             return false;
         }
@@ -133,7 +140,6 @@ public class Utils {
     protected static String createSalt(int rounds) {
         return BCrypt.gensalt(rounds);
     }
-
 
     protected static BigInteger[] get_num_from_password(String password, int lengthN, String salt) {
 
@@ -162,5 +168,28 @@ public class Utils {
             System.out.println("[*] Password hashed and transformed to number < n");
 
         return new BigInteger[]{dIn, BigInteger.valueOf(bit_diff)};
+    }
+
+    protected static byte[][] toBytesArray(byte[] bytes, int lengthN) {
+        int blockSize = lengthN / 4;  // n == 128 -> 32 hex chars per block
+        int blocks = (int) Math.ceil((double) bytes.length / blockSize)  * 2;
+
+        byte[][] hexArray = new byte[blocks][blockSize];
+        int i;
+        for (i = 0; i < blocks - 1; i++) {
+            hexArray[i] = Arrays.copyOfRange(bytes, i * blockSize, (i + 1) * blockSize);
+        }
+        // add last block (circumvent IndexOutOfBoundsException)
+        hexArray[i] = Arrays.copyOfRange(bytes, i * blockSize, bytes.length);
+
+        // padding
+        int diff = blockSize - hexArray[i].length;
+        byte[] withPadding = new byte[blockSize];
+        for (int j = 0; j < blockSize; j++) {
+            withPadding[j] = j < blockSize-diff ? hexArray[i][j] : 0;
+        }
+        hexArray[i] = withPadding;
+
+        return hexArray;
     }
 }

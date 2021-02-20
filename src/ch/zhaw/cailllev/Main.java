@@ -2,41 +2,35 @@ package ch.zhaw.cailllev;
 
 import static ch.zhaw.cailllev.Utils.*;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
+import java.io.*;
 import java.math.BigInteger;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.SecureRandom;
 
 public class Main {
 
-    private static final String ENCRIPTED_EXTENSION = ".parsa";
+    private static final String ENCRYPTED_EXTENSION = ".parsa";
     private static final String KEYFILE_EXTENSION = ".pub";
 
     private static final String HEADER_KEYFILE = "======== BEGIN PUBLIC KEYFILE - PARSA ========\n";
     private static final String TAIL_KEYFILE = "========= END PUBLIC KEYFILE - PARSA =========\n";
 
     private static final int HASH_ROUNDS = 16; //2^16
-    private static final int LENGTH_N = 2048;
+    private static final int LENGTH_N = 1024;
 
     public static BigInteger[] initKeyfile(String name, String password, int lengthN, int hashRounds) throws Exception {
-        System.out.println("[*] Create keyfile with " + lengthN + " bits and " + hashRounds + " hash rounds.");
-
         String keyfileOutName = name + KEYFILE_EXTENSION;
-
         File keyfile = new File(keyfileOutName);
         if (keyfile.exists())
             throw new Exception("Keyfile " + keyfileOutName + " already exists.");
 
-
-
         // test if in debug / testing mode
         boolean debug;
-        if (password != null) {
+        if (password == null) {
             debug = false;
-            lengthN = 2048;
-            hashRounds = 16;
-
+            lengthN = LENGTH_N;
+            hashRounds = HASH_ROUNDS;
         } else {
             debug = true;
         }
@@ -44,7 +38,7 @@ public class Main {
         if (debug && lengthN < 32) {
             throw new Exception("[!] Length of n has to be at least 32 bit, functionality wise.");
         }
-        else if (lengthN < 2048) {
+        else if (lengthN < LENGTH_N) {
             throw new Exception("[!] Length of n has to be at least 2048 bit, security wise.");
         }
 
@@ -54,6 +48,9 @@ public class Main {
         //   000000000
         if ((lengthN & (lengthN - 1)) != 0)
             throw new Exception("[!] Length of n must be power of 2 (2048, 4096, ...).");
+
+        System.out.println("[*] Create keyfile with " + lengthN + " bits and " + hashRounds
+                + " hash rounds.");
 
         SecureRandom secRandom = new SecureRandom();
         int delta = 5 + secRandom.nextInt(10);
@@ -70,7 +67,7 @@ public class Main {
 
         if (!debug) {
             while (true) {
-                System.out.println("[*] Please enter the password to use for the encription: ");
+                System.out.println("[*] Please enter the password to use for the encryption: ");
                 password = new String(System.console().readPassword());
 
                 if (!checkPasswordStrength(password)) {
@@ -81,6 +78,7 @@ public class Main {
                 String passwordCheck = new String(System.console().readPassword());
 
                 if (passwordCheck.equals(password)) {
+                    System.out.println("[*] Successfully created password.");
                     break;
                 }
                 else {
@@ -144,11 +142,48 @@ public class Main {
         return null;
     }
 
-    public static void encript(String filename, String keyfileName) {
+    public static void encrypt(String filename, String keyfileName) throws Exception {
+        String outfileName = filename + ENCRYPTED_EXTENSION;
 
+        File outfile = new File(outfileName);
+        if (outfile.exists())
+            throw new Exception("Encrypted outfile " + outfileName + " already exists.");
+
+        BigInteger n, e;
+        int lengthN;
+
+        try (BufferedReader br = new BufferedReader(new FileReader(keyfileName))) {
+            String[] ns = br.readLine().split(":");
+            n = new BigInteger(ns[0]);
+            lengthN = Integer.parseInt(ns[1]);
+            e = new BigInteger(br.readLine());
+        }
+
+        System.out.println(n);
+        System.out.println(lengthN);
+        System.out.println(e);
+
+        if (n.equals(BigInteger.ZERO) || lengthN == 0 || e.equals(BigInteger.ZERO))
+            throw new Exception("[!] Error reading keyfile " + keyfileName);
+
+        byte[] data = Files.readAllBytes(Path.of(filename));
+        byte[][] mBytes = toBytesArray(data, lengthN);
+
+        //m^e mod n
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outfileName))) {
+            BigInteger m, c;
+            for (byte[] bytes : mBytes) {
+                m = new BigInteger(1, bytes);
+                c = m.modPow(e, n);
+
+                writer.write(c.toString() + "\n");
+            }
+        }
+
+        System.out.println("[*] Successfully encrypted contents of " + filename + " and saved them under " + outfile);
     }
 
-    public static void decript(String filename, String keyfileName, String password, boolean verbose, boolean safe) {
+    public static void decrypt(String filename, String keyfileName, boolean show, boolean save, String password) {
 
     }
 
@@ -183,34 +218,73 @@ public class Main {
         switch (args[0]) {
             case "-h", "--help" -> printHelp();
             case "-i", "--init" -> {
+                if (args.length < 2) {
+                    System.out.println("******************************************************************");
+                    System.out.println("If the keyfile flag is set, the name of it has to be supplied too!");
+                    System.out.println("******************************************************************\n");
+                    printHelp();
+                }
+
                 String keyfileName = args[1];
                 System.out.println("[*] Init keyfile: " + keyfileName);
-                initKeyfile(keyfileName, null, LENGTH_N, HASH_ROUNDS);
+                initKeyfile(keyfileName, null, 0, 0);
             }
             case "-k", "--keyfile" -> {
+                if (args.length < 2) {
+                    System.out.println("******************************************************************");
+                    System.out.println("If the keyfile flag is set, the name of it has to be supplied too!");
+                    System.out.println("******************************************************************\n");
+                    printHelp();
+                }
+                if (args.length < 3) {
+                    System.out.println("**********************************************************************");
+                    System.out.println("If the keyfile is set, the encryption or decryption has to be set too!");
+                    System.out.println("**********************************************************************\n");
+                    printHelp();
+                }
                 String keyfile_name = args[1];
 
-                if (args[2].equals("-e") || args[2].equals("--encript")) {
-                    String file = args[3];
-                    System.out.println("[*] Encript: " + file);
+                if (args[2].equals("-e") || args[2].equals("--encrypt")) {
+                    if (args.length < 4) {
+                        System.out.println("**************************************************************************************************");
+                        System.out.println("If the keyfile and encryption flag is set, the name of the file to encrypt has to be supplied too!");
+                        System.out.println("**************************************************************************************************\n");
+                        printHelp();
+                    }
 
-                    encript(file, keyfile_name);
+                    String file = args[3];
+                    System.out.println("[*] Encrypt: " + file);
+
+                    encrypt(file, keyfile_name);
                 } else if (args[2].equals("-f") || args[2].equals("--decript")) {
+                    if (args.length < 4) {
+                        System.out.println("**************************************************************************************************");
+                        System.out.println("If the keyfile and decryption flag is set, the name of the file to decrypt has to be supplied too!");
+                        System.out.println("**************************************************************************************************\n");
+                        printHelp();
+                    }
+
                     String file = args[3];
                     System.out.println("[*] Decript: " + file);
 
-                    boolean verbose = args[4].equals("-v") || args[4].equals("--verbose")
-                            || args[5].equals("-v") || args[5].equals("--verbose");
+                    boolean show= false, save = false;
 
-                    boolean save = args[4].equals("-s") || args[4].equals("--save")
-                            || args[5].equals("-s") || args[5].equals("--save");
+                    if (args.length == 5) {
+                        show = args[4].equals("-v") || args[4].equals("--verbose");
+                        save = args[4].equals("-s") || args[4].equals("--save");
+                    }
 
-                    decript(file, keyfile_name, "", verbose, save);
-                } else {
-                    System.out.println("**************************************************************************");
-                    System.out.println("If a keyfile is supplied, the encription or decription flag has to be set!");
-                    System.out.println("**************************************************************************\n");
-                    printHelp();
+                    else if (args.length == 6) {
+                        show = args[4].equals("-v") || args[4].equals("--verbose")
+                                || args[5].equals("-v") || args[5].equals("--verbose");
+                        save = args[4].equals("-s") || args[4].equals("--save")
+                                || args[5].equals("-s") || args[5].equals("--save");
+                    }
+
+                    System.out.println("[*] Show decrypted: " + show);
+                    System.out.println("[*] Save decrypted: " + save);
+
+                    decrypt(file, keyfile_name, show, save, null);
                 }
             }
             default -> {
@@ -224,17 +298,18 @@ public class Main {
 
     public static void printHelp() {
         String help =
-                "usage: file_encriptor.py [-h] [-i INIT] | [-k KEYFILE [-e ENCRIPT] | [-d DECRIPT] [-v] [-s]]\n\n"
-                + "parsa - PAssword RSA. Encript and Decript contents of files via RSA algorithm. The private key is a password of your choosing.\n"
+                "usage: file_encryptor.py [-h] [-i INIT] | [-k KEYFILE [-e ENCRYPT] | [-d DECRIPT] [-v] [-s]]\n\n"
+                + "parsa - PAssword RSA. Encrypt and Decript contents of files via RSA algorithm. The private key is a password of your choosing.\n"
                 + "-h, --help                       show this help message and exits.\n"
                 + "-i INIT, --init INIT             Init a keyfile, name of keyfile.\n"
-                + "-k KEYFILE, --keyfile KEYFILE    Encription and Decription mode, name of keyfile.\n"
-                + "-e ENCRIPT, --encript ENCRIPT    Encription mode, name of file to encript.\n"
+                + "-k KEYFILE, --keyfile KEYFILE    Encryption and Decription mode, name of keyfile.\n"
+                + "-e ENCRYPT, --encrypt ENCRYPT    Encryption mode, name of file to encrypt.\n"
                 + "-d DECRIPT, --decript DECRIPT    Decription mode, name of file to decript.\n\n"
                 + "optional arguments:\n"
                 + "-v, --verbose    Decription mode, print decripted file.\n"
                 + "-s, --save             Decription mode, save decripted file.\n";
 
         System.out.println(help);
+        System.exit(1);
     }
 }

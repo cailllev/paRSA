@@ -30,7 +30,7 @@ The potential attacks (i.e. vulnerabilities) are listed below, followed by their
    - password only visible via keyboard, not via bash history or on monitor
    - => as good as possibly prevented -> at least as safe as other passwords
 
-### Attack on e (encriptor)
+### Attack on e (encryptor)
  - small exponent attack
    - e is generated according to d
    - immensly small chance to be small
@@ -75,8 +75,8 @@ The potential attacks (i.e. vulnerabilities) are listed below, followed by their
    - public keyfile contains no sensitive information
    - => no attack possible
 
-### Attack on encripted file
- - reverse engineer data in encripted files
+### Attack on encrypted file
+ - reverse engineer data in encrypted files
    - rsa algorithm is considered to be secure
    - => no attack possible
 

@@ -1,5 +1,7 @@
 package ch.zhaw.cailllev;
 
+import org.mindrot.jbcrypt.BCrypt;
+
 import static ch.zhaw.cailllev.Utils.*;
 
 import java.io.*;
@@ -19,11 +21,13 @@ public class Main {
     private static final int HASH_ROUNDS = 16; //2^16
     private static final int LENGTH_N = 1024;
 
-    public static BigInteger[] initKeyfile(String name, String password, int lengthN, int hashRounds) throws Exception {
+    public static BigInteger[] initKeyfile(String name, String password, int lengthN, int hashRounds) {
         String keyfileOutName = name + KEYFILE_EXTENSION;
         File keyfile = new File(keyfileOutName);
-        if (keyfile.exists())
-            throw new Exception("Keyfile " + keyfileOutName + " already exists.");
+        if (keyfile.exists()) {
+            System.out.println("[!] Keyfile " + keyfileOutName + " already exists.");
+            System.exit(1);
+        }
 
         // test if in debug / testing mode
         boolean debug;
@@ -36,18 +40,22 @@ public class Main {
         }
 
         if (debug && lengthN < 32) {
-            throw new Exception("[!] Length of n has to be at least 32 bit, functionality wise.");
+            System.out.println("[!] Length of n has to be at least 32 bit, functionality wise.");
+            System.exit(1);
         }
         else if (lengthN < LENGTH_N) {
-            throw new Exception("[!] Length of n has to be at least 2048 bit, security wise.");
+            System.out.println("[!] Length of n has to be at least 2048 bit, security wise.");
+            System.exit(1);
         }
 
         //   100000000 // number
         // & 011111111 // number - 1
         // -----------
         //   000000000
-        if ((lengthN & (lengthN - 1)) != 0)
-            throw new Exception("[!] Length of n must be power of 2 (2048, 4096, ...).");
+        if ((lengthN & (lengthN - 1)) != 0) {
+            System.out.println("[!] Length of n must be power of 2 (2048, 4096, ...).");
+            System.exit(1);
+        }
 
         System.out.println("[*] Create keyfile with " + lengthN + " bits and " + hashRounds
                 + " hash rounds.");
@@ -87,8 +95,17 @@ public class Main {
             }
         }
 
-        String salt = createSalt(hashRounds);
-        BigInteger[] hashed  = get_num_from_password(password, lengthN, salt);
+        String salt = null;
+        try {
+            salt = BCrypt.gensalt(hashRounds);
+        }
+
+        catch (Exception ex) {
+            System.out.println("[!] Internal BCrypt error.");
+            System.exit(1);
+        }
+
+        BigInteger[] hashed  = getNumFromPassword(password, lengthN, salt);
         BigInteger dIn = hashed[0];
         int bitDiff = hashed[1].intValue();
 
@@ -120,13 +137,18 @@ public class Main {
         BigInteger quotient = diff.divide(dIn);
         BigInteger remainder = diff.mod(dIn);
 
-        BufferedWriter writer = new BufferedWriter(new FileWriter(keyfileOutName));
-        writer.write(HEADER_KEYFILE);
-        writer.write(n.toString() + ":" + lengthN + "\n");
-        writer.write(e.toString() + "\n");
-        writer.write(salt + ":" + quotient.toString() + ":" + remainder.toString() + "\n");
-        writer.write(TAIL_KEYFILE);
-        writer.close();
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(keyfileOutName))) {
+            writer.write(HEADER_KEYFILE);
+            writer.write(n.toString() + ":" + lengthN + "\n");
+            writer.write(e.toString() + "\n");
+            writer.write(salt + ":" + quotient.toString() + ":" + remainder.toString() + "\n");
+            writer.write(TAIL_KEYFILE);
+        }
+
+        catch (IOException ex) {
+            System.out.println("[!] IOExeption when writing to keyfile " + keyfileOutName + ".");
+            System.exit(1);
+        }
 
         // i.e. in Test / Debug mode
         if (debug) {
@@ -142,32 +164,54 @@ public class Main {
         return null;
     }
 
-    public static void encrypt(String filename, String keyfileName) throws Exception {
+    public static void encrypt(String filename, String keyfileName) {
         String outfileName = filename + ENCRYPTED_EXTENSION;
 
         File outfile = new File(outfileName);
-        if (outfile.exists())
-            throw new Exception("Encrypted outfile " + outfileName + " already exists.");
+        if (outfile.exists()) {
+            System.out.println("[!] Encrypted outfile " + outfileName + " already exists.");
+            System.exit(1);
+        }
 
-        BigInteger n, e;
-        int lengthN;
+        BigInteger n = null, e = null;
+        int lengthN = 0;
 
         try (BufferedReader br = new BufferedReader(new FileReader(keyfileName))) {
+            // read header
+            br.readLine();
+
+            // read n
             String[] ns = br.readLine().split(":");
             n = new BigInteger(ns[0]);
             lengthN = Integer.parseInt(ns[1]);
+
+            // read e
             e = new BigInteger(br.readLine());
+
+        } catch (FileNotFoundException ex) {
+            System.out.println("[!] Keyfile " + keyfileName + " not found.");
+            System.exit(1);
+
+        } catch (IOException ex) {
+            System.out.println("[!] IOExeption when reading keyfile " + keyfileName + ".");
+            System.exit(1);
         }
 
-        System.out.println(n);
-        System.out.println(lengthN);
-        System.out.println(e);
+        catch (Exception ex) {
+            System.out.println("[!] Error parsing keyfile " + keyfileName + ".");
+            System.exit(1);
+        }
 
-        if (n.equals(BigInteger.ZERO) || lengthN == 0 || e.equals(BigInteger.ZERO))
-            throw new Exception("[!] Error reading keyfile " + keyfileName);
+        byte[] data = new byte[0];
+        try {
+            data = Files.readAllBytes(Path.of(filename));
 
-        byte[] data = Files.readAllBytes(Path.of(filename));
-        byte[][] mBytes = toBytesArray(data, lengthN);
+        } catch (IOException ex) {
+            System.out.println("[!] IOExeption when reading file to encrypt " + filename + ".");
+            System.exit(1);
+        }
+
+        byte[][] mBytes = toChunks(data, lengthN);
 
         //m^e mod n
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(outfileName))) {
@@ -178,6 +222,10 @@ public class Main {
 
                 writer.write(c.toString() + "\n");
             }
+
+        } catch (IOException ex) {
+            System.out.println("[!] IOExeption when writing cipher to " + outfileName + ".");
+            System.exit(1);
         }
 
         System.out.println("[*] Successfully encrypted contents of " + filename + " and saved them under " + outfile);
@@ -205,11 +253,11 @@ public class Main {
      *
      * @param args the arguments for the program
      */
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
         parse(args);
     }
 
-    public static void parse(String[] args) throws Exception {
+    public static void parse(String[] args) {
         if (args.length == 0) {
             printHelp();
             return;

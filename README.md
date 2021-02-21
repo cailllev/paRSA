@@ -19,7 +19,8 @@ java ch.zhaw.cailllev.Main -h
 
 ## TODO
 - this project, but with Elliptic Curves instead RSA
-- sign and verify logic
+- sign and verify sign logic
+- add loading bar for prime gen instead of seconds
 
 ## Implementation Comments
 - pow() and "squarre-and-mul-pow()", i.e. my_pow() are almost equally slow (max 1% diff) -> use standard pow()

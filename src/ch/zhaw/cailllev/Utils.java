@@ -1,5 +1,9 @@
 package ch.zhaw.cailllev;
 
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -7,20 +11,64 @@ import java.util.Arrays;
 
 import org.mindrot.jbcrypt.BCrypt;
 
+class KeyfileContent {
+    private final BigInteger n;
+    private final int lengthN;
+    private final BigInteger e;
+    private final String salt;
+    private final BigInteger quotient;
+    private final BigInteger remainder;
+
+    public KeyfileContent(BigInteger n, int lengthN, BigInteger e, String salt, BigInteger quotient,
+                           BigInteger remainder) {
+        this.n = n;
+        this.lengthN = lengthN;
+        this.e = e;
+        this.salt = salt;
+        this.quotient = quotient;
+        this.remainder = remainder;
+    }
+
+    public BigInteger getN() {
+        return n;
+    }
+
+    public int getLengthN() {
+        return lengthN;
+    }
+
+    public BigInteger getE() {
+        return e;
+    }
+
+    public String getSalt() {
+        return salt;
+    }
+
+    public BigInteger getQuotient() {
+        return quotient;
+    }
+
+    public BigInteger getRemainder() {
+        return remainder;
+    }
+}
+
 public class Utils {
 
-    // private static final BigInteger ZERO = BigInteger.ZERO;
     private static final BigInteger ONE = BigInteger.ONE;
     private static final BigInteger TWO = BigInteger.TWO;
-    // private static final BigInteger THREE = BigInteger.valueOf(3);
-    // private static final BigInteger FOUR = BigInteger.valueOf(4);
     private static final BigInteger FIVE = BigInteger.valueOf(5);
     private static final BigInteger SIX = BigInteger.valueOf(6);
 
     // log2(10^20) == 66.5;
     private static final int CERTAINTY = 67;
 
-
+    /**
+     * Creates an array of primes up to {@code max}.
+     * @param max   upper bound of primes
+     * @return      the array of primes
+     */
     public static int[] createTableOfPrimes(int max) {
         ArrayList<Integer> primes = new ArrayList<>();
         for (int i = 2; i <= max; i++){
@@ -32,6 +80,9 @@ public class Utils {
         return primes.stream().mapToInt(i1 -> i1).toArray();
     }
 
+    /**
+     * @return i % 6 == 5
+     */
     private static boolean okWith5Mod6(BigInteger i) {
         return (i.mod(SIX)).equals(FIVE);
     }
@@ -44,7 +95,7 @@ public class Utils {
     }
 
     /**
-     * Prints the estimate of how long the prime generation takes for 2 primes with bit length {@code bitLength}
+     * Prints the estimate of how long the prime generation takes for 2 primes with bit length {@code bitLength}.
      * @param bitLength the bit length of the primes to generate
      */
     protected static void safePrimeBM(int bitLength) {
@@ -54,19 +105,18 @@ public class Utils {
 
         safePrime(bitLengthBM);
 
-        int diff = (int) ((System.currentTimeMillis() - start) / 1000);
-        int estimate = diff * (2 << bitLength >> bitLengthBMExp) * 2;
+        double diff = (System.currentTimeMillis() - start) / (double) 1000;
+        int estimate = (int) (diff * ((double) bitLength / bitLengthBMExp) * 2);
 
         System.out.println("[*] Estimation to create " + 2 + " safe "
                 + bitLength + " bit primes: ~ " + estimate + "s.");
     }
 
     /**
-     * creates a safe prime number p with bit length {@code bitLength}
-     * safe means that (p-1)/2 is also a prime number
-     * p is with certainty 2^67 a prime number
+     * Creates a safe prime number p with bit length {@code bitLength}. Safe means that (p-1)/2 is also a prime number.
+     * Finally, p is with certainty of 2^67 a prime number.
      * @param bitLength the bit length of prime p
-     * @return prime p
+     * @return          prime p
      */
     protected static BigInteger safePrime(int bitLength) {
         SecureRandom rnd = new SecureRandom();
@@ -119,10 +169,10 @@ public class Utils {
     }
 
     /**
-     * check if the password is at least 10 chars long, contains at least one number, at least one lowercase letter, at
-     * least one uppercase letter and at least one special char
-     * @param password the password to check
-     * @return true if all checks succeed
+     * Check if the password is at least 10 chars long, contains at least one number, at least one lowercase letter, at
+     * least one uppercase letter and at least one special char.
+     * @param password  the password to check
+     * @return          true if all checks succeed
      */
     protected static boolean checkPasswordStrength(String password) {
         if (password.length() < 10) {
@@ -153,11 +203,19 @@ public class Utils {
         return true;
     }
 
-    protected static BigInteger[] getNumFromPassword(String password, int lengthN, String salt) {
+    /**
+     * Hashes a string with BCrypt, then converts that hash to a BigInteger. If that BigInteger is bigger than n,
+     * right shift it until it fits.
+     * @param password  the password to hash
+     * @param lengthN   the size of n
+     * @param salt      the salt to use for the hashing
+     * @return  the hashed string as a BigInteger plus it's difference in bits to n
+     */
+    protected static BigInteger getNumFromPassword(String password, int lengthN, String salt) {
 
-        String hashed = null;
+        String[] s = null;
         try {
-            hashed = BCrypt.hashpw(password, salt);
+            s = BCrypt.hashpw(password, salt).split("\\$");
         }
 
         catch (Exception ex) {
@@ -165,33 +223,26 @@ public class Utils {
             System.exit(1);
         }
 
-        String[] s = hashed.split("\\$");
         String rounds = s[2];
         String hash = s[3];
 
         BigInteger dIn = new BigInteger(1, hash.getBytes());
-        int bit_diff = lengthN - dIn.bitLength();
+        int bitDiff = lengthN - dIn.bitLength();
 
-        // if d_in is bigger than n -> rightshift so it fits
-        if (bit_diff < 0) {
-            dIn = dIn.shiftRight(-bit_diff);
-            bit_diff = 0;
+        // if dIn is bigger than n -> rightshift so it fits
+        if (bitDiff < 0) {
+            dIn = dIn.shiftRight(-bitDiff + 1);
         }
 
-        // still bigger than n -> shift once more
-        if (dIn.shiftRight(lengthN).compareTo(BigInteger.ZERO) >= 0) {
-            dIn = dIn.shiftRight(1);
-        }
-
-        //only print this if not testing exhaustively(i.e.rounds == 16)
+        //only print this if not testing exhaustively (i.e.rounds != 16)
         if (rounds.equals("16"))
             System.out.println("[*] Password hashed and transformed to number < n");
 
-        return new BigInteger[]{dIn, BigInteger.valueOf(bit_diff)};
+        return dIn;
     }
 
     protected static byte[][] toChunks(byte[] bytes, int lengthN) {
-        int blockSize = lengthN / 8;  // n == 2048 -> 256 bytes per block
+        int blockSize = (1 << lengthN) / 8;  // n == 2048 -> 256 bytes per block
         int blocks = (int) Math.ceil((double) bytes.length / blockSize);
 
         byte[][] hexArray = new byte[blocks][blockSize];
@@ -205,5 +256,44 @@ public class Utils {
             System.arraycopy(bytes, start, hexArray[blocks - 1], 0, bytes.length - start);
 
         return hexArray;
+    }
+
+    protected static KeyfileContent parseKeyfile(String keyfileName) {
+
+        try (BufferedReader br = new BufferedReader(new FileReader(keyfileName))) {
+            // read header
+            br.readLine();
+
+            // read n
+            String[] ns = br.readLine().split(":");
+            BigInteger n = new BigInteger(ns[0]);
+            int lengthN = Integer.parseInt(ns[1]);
+
+            // read e
+            BigInteger e = new BigInteger(br.readLine());
+
+            // read d
+            String[] ds = br.readLine().split(":");
+            String salt = ds[0];
+            BigInteger quotient = new BigInteger(ds[1]);
+            BigInteger remainder = new BigInteger(ds[2]);
+
+            return new KeyfileContent(n, lengthN, e, salt, quotient, remainder);
+
+        } catch (FileNotFoundException ex) {
+            System.out.println("[!] Keyfile " + keyfileName + " not found.");
+            System.exit(1);
+
+        } catch (IOException ex) {
+            System.out.println("[!] IOException when reading keyfile " + keyfileName + ".");
+            System.exit(1);
+        }
+
+        catch (Exception ex) {
+            System.out.println("[!] Error parsing keyfile " + keyfileName + ".");
+            System.exit(1);
+        }
+
+        return null;
     }
 }

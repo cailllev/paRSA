@@ -1,27 +1,29 @@
 package ch.zhaw.cailllev;
 
-import org.mindrot.jbcrypt.BCrypt;
-
 import static ch.zhaw.cailllev.Utils.*;
 
+import org.mindrot.jbcrypt.BCrypt;
 import java.io.*;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Main {
 
-    private static final String ENCRYPTED_EXTENSION = ".parsa";
-    private static final String KEYFILE_EXTENSION = ".pub";
+    protected static final String ENCRYPTED_EXTENSION = ".parsa";
+    protected static final String KEYFILE_EXTENSION = ".pub";
 
     private static final String HEADER_KEYFILE = "======== BEGIN PUBLIC KEYFILE - PARSA ========\n";
     private static final String TAIL_KEYFILE = "========= END PUBLIC KEYFILE - PARSA =========\n";
 
     private static final int HASH_ROUNDS = 16; //2^16
-    private static final int LENGTH_N = 1024;
+    private static final int LENGTH_N = 2048;
 
-    public static BigInteger[] initKeyfile(String name, String password, int lengthN, int hashRounds) {
+    protected static BigInteger[] initKeyfile(String name, String password, int lengthN, int hashRounds) {
         String keyfileOutName = name + KEYFILE_EXTENSION;
         File keyfile = new File(keyfileOutName);
         if (keyfile.exists()) {
@@ -43,7 +45,7 @@ public class Main {
             System.out.println("[!] Length of n has to be at least 32 bit, functionality wise.");
             System.exit(1);
         }
-        else if (lengthN < LENGTH_N) {
+        else if (!debug && lengthN < LENGTH_N) {
             System.out.println("[!] Length of n has to be at least 2048 bit, security wise.");
             System.exit(1);
         }
@@ -105,9 +107,8 @@ public class Main {
             System.exit(1);
         }
 
-        BigInteger[] hashed  = getNumFromPassword(password, lengthN, salt);
-        BigInteger dIn = hashed[0];
-        int bitDiff = hashed[1].intValue();
+        BigInteger dIn  = getNumFromPassword(password, lengthN, salt);
+        int bitDiff = lengthN - dIn.bitLength();
 
         BigInteger e, d, diff;
 
@@ -146,7 +147,7 @@ public class Main {
         }
 
         catch (IOException ex) {
-            System.out.println("[!] IOExeption when writing to keyfile " + keyfileOutName + ".");
+            System.out.println("[!] IOException when writing to keyfile " + keyfileOutName + ".");
             System.exit(1);
         }
 
@@ -164,7 +165,7 @@ public class Main {
         return null;
     }
 
-    public static void encrypt(String filename, String keyfileName) {
+    protected static void encrypt(String filename, String keyfileName) {
         String outfileName = filename + ENCRYPTED_EXTENSION;
 
         File outfile = new File(outfileName);
@@ -173,41 +174,17 @@ public class Main {
             System.exit(1);
         }
 
-        BigInteger n = null, e = null;
-        int lengthN = 0;
-
-        try (BufferedReader br = new BufferedReader(new FileReader(keyfileName))) {
-            // read header
-            br.readLine();
-
-            // read n
-            String[] ns = br.readLine().split(":");
-            n = new BigInteger(ns[0]);
-            lengthN = Integer.parseInt(ns[1]);
-
-            // read e
-            e = new BigInteger(br.readLine());
-
-        } catch (FileNotFoundException ex) {
-            System.out.println("[!] Keyfile " + keyfileName + " not found.");
-            System.exit(1);
-
-        } catch (IOException ex) {
-            System.out.println("[!] IOExeption when reading keyfile " + keyfileName + ".");
-            System.exit(1);
-        }
-
-        catch (Exception ex) {
-            System.out.println("[!] Error parsing keyfile " + keyfileName + ".");
-            System.exit(1);
-        }
+        KeyfileContent kC = parseKeyfile(keyfileName);
+        BigInteger n = kC.getN();
+        int lengthN = kC.getLengthN();
+        BigInteger e = kC.getE();
 
         byte[] data = new byte[0];
         try {
             data = Files.readAllBytes(Path.of(filename));
 
         } catch (IOException ex) {
-            System.out.println("[!] IOExeption when reading file to encrypt " + filename + ".");
+            System.out.println("[!] IOException when reading file to encrypt " + filename + ".");
             System.exit(1);
         }
 
@@ -224,16 +201,120 @@ public class Main {
             }
 
         } catch (IOException ex) {
-            System.out.println("[!] IOExeption when writing cipher to " + outfileName + ".");
+            System.out.println("[!] IOException when writing cipher to " + outfileName + ".");
             System.exit(1);
         }
 
         System.out.println("[*] Successfully encrypted contents of " + filename + " and saved them under " + outfile);
     }
 
-    public static void decrypt(String filename, String keyfileName, boolean show, boolean save, String password) {
+    protected static void decrypt(String filename, String keyfileName, boolean show, boolean save, String password) {
 
+        KeyfileContent kC = parseKeyfile(keyfileName);
+        BigInteger n = kC.getN();
+        int lengthN = kC.getLengthN();
+        String salt = kC.getSalt();
+        BigInteger quotient = kC.getQuotient();
+        BigInteger remainder = kC.getRemainder();
+
+        if (password == null) {
+            System.out.println("[*] Please enter your password: ");
+            password = new String(System.console().readPassword());
+        }
+
+        // d + diff = real d
+        // qout = diff / d
+        // rem = diff % d
+        // => diff = d*qout + rem
+        // => real d = d + d*qout + rem
+        BigInteger d = getNumFromPassword(password, lengthN, salt);
+        d = d.add(quotient.multiply(d)).add(remainder);
+
+        List<String> data = null;
+        try {
+            data = Files.readAllLines(Path.of(filename));
+
+        } catch (IOException ex) {
+            System.out.println("[!] IOException when reading the file to encrypt " + filename + ".");
+            System.exit(1);
+        }
+
+        // #c^d mod n
+        ArrayList<Byte> plain = new ArrayList<>();
+        for (String cS : data) {
+            BigInteger c = new BigInteger(cS);
+
+            BigInteger m = c.modPow(d, n);
+
+            for (Byte b : m.toByteArray()) {
+                plain.add(b);
+            }
+        }
+
+        // remove padding, i.e. trailing 0 bytes
+        int i = plain.size() - 1;
+        while (plain.get(i) != 0) {
+            plain.remove(i);
+        }
+
+        byte[] plainArray = new byte[plain.size()];
+        for(int j = 0; j < plain.size(); j++) {
+            plainArray[j] = plain.get(j);
+        }
+
+        System.out.println("[*] Successfully decripted contents of " + filename + ".");
+
+        if (show) {
+            String plainDecoded = new String(plainArray, StandardCharsets.US_ASCII);
+            boolean canBeShown = StandardCharsets.US_ASCII.newEncoder().canEncode(plainDecoded);
+
+            if (canBeShown) {
+                System.out.println("[*] Result of decription see below.");
+                System.out.println("*******************************");
+                System.out.println(plainDecoded);
+                System.out.println("*******************************");
+            } else {
+                System.out.println("[*] The plain text cannot be shown (not in ASCII format).");
+
+                if (!save) {
+                    System.out.println("[*] The plain text is cuurently not getting saved, save it? [Y/n]");
+
+                    try {
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+                        String ans = reader.readLine();
+                        if (ans.equals("Y") || ans.equals("y") || ans.equals("")) {
+                            save = true;
+                        }
+
+                    } catch (IOException ex) {
+                        System.out.println("[!] IOException when reading from stdin.");
+                        System.exit(1);
+                    }
+                }
+            }
+        }
+
+        if (save) {
+            String outfileName = filename.substring(0, filename.length() - ENCRYPTED_EXTENSION.length());
+
+            File outfile = new File(outfileName);
+            if (outfile.exists()) {
+                System.out.println("[!] Decripted outfile " + outfile + " already exists.");
+                System.exit(1);
+            }
+
+            try (FileOutputStream fos = new FileOutputStream(outfileName)) {
+                fos.write(plainArray);
+
+            } catch (IOException ex) {
+                System.out.println("[!] Error when writing plain text to outfile " + outfile + ".");
+                System.exit(1);
+            }
+
+            System.out.println("[*] Contents saved in " + outfile + ".");
+        }
     }
+
 
     /**
      * normal rsa:
@@ -251,13 +332,13 @@ public class Main {
      * public = (n,e,diff)
      * private = (n,password)
      *
-     * @param args the arguments for the program
+     * @param args the command line arguments for the program
      */
     public static void main(String[] args) {
         parse(args);
     }
 
-    public static void parse(String[] args) {
+    private static void parse(String[] args) {
         if (args.length == 0) {
             printHelp();
             return;
@@ -344,7 +425,7 @@ public class Main {
         }
     }
 
-    public static void printHelp() {
+    private static void printHelp() {
         String help =
                 "usage: file_encryptor.py [-h] [-i INIT] | [-k KEYFILE [-e ENCRYPT] | [-d DECRIPT] [-v] [-s]]\n\n"
                 + "parsa - PAssword RSA. Encrypt and Decript contents of files via RSA algorithm. The private key is a password of your choosing.\n"

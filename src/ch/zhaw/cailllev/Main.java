@@ -41,14 +41,8 @@ public class Main {
             debug = true;
         }
 
-        if (debug) {
-            if (lengthN < 32) {
-                System.out.println("[!] Length of n has to be at least 32 bit, functionality wise.");
-                System.exit(1);
-            }
-        }
-        else if (lengthN < LENGTH_N) {
-            System.out.println("[!] Length of n has to be at least 2048 bit, security wise.");
+        if (debug &&lengthN < 32) {
+            System.out.println("[!] Length of n has to be at least 32 bit, functionality wise.");
             System.exit(1);
         }
 

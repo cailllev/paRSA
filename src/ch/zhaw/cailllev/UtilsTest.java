@@ -2,7 +2,7 @@ package ch.zhaw.cailllev;
 
 import org.mindrot.jbcrypt.BCrypt;
 
-import java.io.IOException;
+import java.io.*;
 import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -11,6 +11,9 @@ import java.util.Arrays;
 import static org.junit.jupiter.api.Assertions.*;
 
 class UtilsTest {
+
+    private static final String keyfileName = "test_keyfile";
+    private static final String keyfileNameOut = keyfileName + Main.KEYFILE_EXTENSION;
 
     @org.junit.jupiter.api.Test
     void checkPasswordStrength() {
@@ -49,8 +52,8 @@ class UtilsTest {
 
     @org.junit.jupiter.api.Test
     void toChunks() {
-        int lengthN = 11;
-        int numBytes = (1 << lengthN) / 8;
+        int lengthN = 2048;
+        int numBytes = lengthN / 8;
 
         // test up to 4 blocks
         for (int blocks = 1; blocks <= 4; blocks++) {
@@ -85,23 +88,16 @@ class UtilsTest {
     }
 
     @org.junit.jupiter.api.Test
-    void parseKeyfile() {
+    void parseKeyfile() throws IOException {
         int lengthN = 512;
         int hashRounds = 12;
 
-        String keyfileName = "test_keyfile";
-        String keyfileNameLong = keyfileName + Main.KEYFILE_EXTENSION;
-
         Main.initKeyfile(keyfileName, "a", lengthN, hashRounds);
-        KeyfileContent kC = Utils.parseKeyfile(keyfileNameLong);
+        KeyfileContent kC = Utils.parseKeyfile(keyfileNameOut);
 
         assertEquals(kC.getLengthN(), lengthN);
         assertEquals(kC.getSalt().split("\\$")[2], "" + hashRounds);
 
-        try {
-            Files.deleteIfExists(Path.of(keyfileNameLong));
-        } catch (IOException ex) {
-            System.out.println("[!] Unable to delete keyfile " + keyfileNameLong + ", remove manually!");
-        }
+        Files.deleteIfExists(Path.of(keyfileNameOut));
     }
 }

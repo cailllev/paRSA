@@ -139,8 +139,8 @@ public class Utils {
 
                     // check 5 mod 6
                     do {
-                        q = new BigInteger(bitLength - 1, rnd);
-                    } while (!(okWith5Mod6(q)));
+                        q = new BigInteger(bitLength, rnd);
+                    } while (q.bitLength() < bitLength && !(okWith5Mod6(q)));
 
                     // check with r
                     boolean foundProblem = false;
@@ -242,7 +242,7 @@ public class Utils {
     }
 
     protected static byte[][] toChunks(byte[] bytes, int lengthN) {
-        int blockSize = (1 << lengthN) / 8;  // n == 2048 -> 256 bytes per block
+        int blockSize = lengthN / 8;  // n == 2048 -> 256 bytes per block
         int blocks = (int) Math.ceil((double) bytes.length / blockSize);
 
         byte[][] hexArray = new byte[blocks][blockSize];

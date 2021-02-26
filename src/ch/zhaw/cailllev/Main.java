@@ -41,11 +41,13 @@ public class Main {
             debug = true;
         }
 
-        if (debug && lengthN < 32) {
-            System.out.println("[!] Length of n has to be at least 32 bit, functionality wise.");
-            System.exit(1);
+        if (debug) {
+            if (lengthN < 32) {
+                System.out.println("[!] Length of n has to be at least 32 bit, functionality wise.");
+                System.exit(1);
+            }
         }
-        else if (!debug && lengthN < LENGTH_N) {
+        else if (lengthN < LENGTH_N) {
             System.out.println("[!] Length of n has to be at least 2048 bit, security wise.");
             System.exit(1);
         }
@@ -65,7 +67,7 @@ public class Main {
         SecureRandom secRandom = new SecureRandom();
         int delta = 5 + secRandom.nextInt(10);
         int lengthP = lengthN / 2 + delta;
-        int lengthQ = lengthN - lengthP - 1;
+        int lengthQ = lengthN - lengthP + 1;
 
         safePrimeBM(lengthN / 2);
         BigInteger p = safePrime(lengthP);
@@ -253,8 +255,9 @@ public class Main {
 
         // remove padding, i.e. trailing 0 bytes
         int i = plain.size() - 1;
-        while (plain.get(i) != 0) {
+        while (plain.get(i) == 0) {
             plain.remove(i);
+            i--;
         }
 
         byte[] plainArray = new byte[plain.size()];

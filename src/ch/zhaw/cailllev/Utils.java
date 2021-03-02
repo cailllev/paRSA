@@ -8,6 +8,11 @@ import java.math.BigInteger;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.mindrot.jbcrypt.BCrypt;
 
@@ -55,119 +60,6 @@ class KeyfileContent {
 }
 
 public class Utils {
-
-    private static final BigInteger ONE = BigInteger.ONE;
-    private static final BigInteger TWO = BigInteger.TWO;
-    private static final BigInteger FIVE = BigInteger.valueOf(5);
-    private static final BigInteger SIX = BigInteger.valueOf(6);
-
-    // log2(10^20) == 66.5;
-    private static final int CERTAINTY = 67;
-
-    /**
-     * Creates an array of primes up to {@code max}.
-     * @param max   upper bound of primes
-     * @return      the array of primes
-     */
-    public static int[] createTableOfPrimes(int max) {
-        ArrayList<Integer> primes = new ArrayList<>();
-        for (int i = 2; i <= max; i++){
-            if ((new BigInteger(String.valueOf(i))).isProbablePrime(CERTAINTY)){
-                primes.add(i);
-            }
-        }
-
-        return primes.stream().mapToInt(i1 -> i1).toArray();
-    }
-
-    /**
-     * @return i % 6 == 5
-     */
-    private static boolean okWith5Mod6(BigInteger i) {
-        return (i.mod(SIX)).equals(FIVE);
-    }
-
-    /**
-     * @return i % r == (r-1)/2
-     */
-    private static boolean okWithR(BigInteger i, BigInteger r) {
-        return !(i.mod(r)).equals((r.subtract(ONE)).divide(TWO));
-    }
-
-    /**
-     * Prints the estimate of how long the prime generation takes for 2 primes with bit length {@code bitLength}.
-     * @param bitLength the bit length of the primes to generate
-     */
-    protected static void safePrimeBM(int bitLength) {
-        long start = System.currentTimeMillis();
-        int bitLengthBMExp = 8;
-        int bitLengthBM = 2 << bitLengthBMExp;  // 256
-
-        safePrime(bitLengthBM);
-
-        double diff = (System.currentTimeMillis() - start) / (double) 1000;
-        int estimate = (int) (diff * ((double) bitLength / bitLengthBMExp) * 2);
-
-        System.out.println("[*] Estimation to create " + 2 + " safe "
-                + bitLength + " bit primes: ~ " + estimate + "s.");
-    }
-
-    /**
-     * Creates a safe prime number p with bit length {@code bitLength}. Safe means that (p-1)/2 is also a prime number.
-     * Finally, p is with certainty of 2^67 a prime number.
-     * @param bitLength the bit length of prime p
-     * @return          prime p
-     */
-    protected static BigInteger safePrime(int bitLength) {
-        SecureRandom rnd = new SecureRandom();
-
-        if (bitLength < 16) {
-            System.out.println("[!] Bit length cannot be smaller than 16 when creating a safe prime.");
-            System.exit(1);
-        }
-
-        int[] tableOfPrimes = createTableOfPrimes(1024);
-
-        BigInteger r, q, p;
-
-        do {
-
-            do {
-
-                // do fast tests "q.mod(6) != 5" and "q.mod(r) != (r-1)/2"
-                while (true) {
-
-                    // check 5 mod 6
-                    do {
-                        q = new BigInteger(bitLength, rnd);
-                    } while (q.bitLength() < bitLength && !(okWith5Mod6(q)));
-
-                    // check with r
-                    boolean foundProblem = false;
-                    for (int i = 1; i < tableOfPrimes.length; i++) {
-                        r = BigInteger.valueOf(tableOfPrimes[i]); //starts at val 3
-                        if (!(okWithR(q, r))) {
-                            foundProblem = true;
-                            break;
-                        }
-                    }
-
-                    if (!foundProblem)
-                        break;
-                }
-
-                // now check q "exhaustively"
-            } while (!(q.isProbablePrime(CERTAINTY)));
-
-            // here q is presumably a prime, now check if p is also a prime
-            // p = 2q + 1
-            p = q.multiply(TWO).add(ONE);
-
-        } while (!(p.isProbablePrime(CERTAINTY)));
-
-        return p;
-    }
-
     /**
      * Check if the password is at least 10 chars long, contains at least one number, at least one lowercase letter, at
      * least one uppercase letter and at least one special char.
@@ -219,7 +111,7 @@ public class Utils {
         }
 
         catch (Exception ex) {
-            System.out.println("[!] Internal BCrypt error.");
+            System.out.println("[!] Internal BCrypt error. Exiting...");
             System.exit(1);
         }
 
@@ -281,16 +173,16 @@ public class Utils {
             return new KeyfileContent(n, lengthN, e, salt, quotient, remainder);
 
         } catch (FileNotFoundException ex) {
-            System.out.println("[!] Keyfile " + keyfileName + " not found.");
+            System.out.println("[!] Keyfile " + keyfileName + " not found. Exiting...");
             System.exit(1);
 
         } catch (IOException ex) {
-            System.out.println("[!] IOException when reading keyfile " + keyfileName + ".");
+            System.out.println("[!] IOException when reading keyfile " + keyfileName + ". Exiting...");
             System.exit(1);
         }
 
         catch (Exception ex) {
-            System.out.println("[!] Error parsing keyfile " + keyfileName + ".");
+            System.out.println("[!] Error parsing keyfile " + keyfileName + ". Exiting...");
             System.exit(1);
         }
 

@@ -1,6 +1,7 @@
 package ch.zhaw.cailllev;
 
 import static ch.zhaw.cailllev.Utils.*;
+import static ch.zhaw.cailllev.Primes.*;
 
 import org.mindrot.jbcrypt.BCrypt;
 import java.io.*;
@@ -11,6 +12,7 @@ import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public class Main {
 
@@ -27,7 +29,7 @@ public class Main {
         String keyfileOutName = name + KEYFILE_EXTENSION;
         File keyfile = new File(keyfileOutName);
         if (keyfile.exists()) {
-            System.out.println("[!] Keyfile " + keyfileOutName + " already exists.");
+            System.out.println("[!] Keyfile " + keyfileOutName + " already exists. Exiting...");
             System.exit(1);
         }
 
@@ -42,7 +44,7 @@ public class Main {
         }
 
         if (debug &&lengthN < 32) {
-            System.out.println("[!] Length of n has to be at least 32 bit, functionality wise.");
+            System.out.println("[!] Length of n has to be at least 32 bit, functionality wise. Exiting...");
             System.exit(1);
         }
 
@@ -51,7 +53,7 @@ public class Main {
         // -----------
         //   000000000
         if ((lengthN & (lengthN - 1)) != 0) {
-            System.out.println("[!] Length of n must be power of 2 (2048, 4096, ...).");
+            System.out.println("[!] Length of n must be power of 2 (2048, 4096, ...). Exiting...");
             System.exit(1);
         }
 
@@ -63,9 +65,35 @@ public class Main {
         int lengthP = lengthN / 2 + delta;
         int lengthQ = lengthN - lengthP + 1;
 
-        safePrimeBM(lengthN / 2);
-        BigInteger p = safePrime(lengthP);
-        BigInteger q = safePrime(lengthQ);
+        int[] bitLengths = new int[] {lengthP, lengthQ};
+
+        int estimate = safePrimeBM(lengthN);
+        Runnable progress =
+                () -> {
+                    // time to complete one percent
+                    int stepTime = (int) (estimate / 100.0 / 1000.0);
+                    System.out.print("[*] Progress: ");
+
+                    // print one # every percent
+                    for (int i = 0; i < 100; i++) {
+                        try {
+                            TimeUnit.MILLISECONDS.sleep(1);
+                        } catch (InterruptedException ex) {
+                            continue;
+                        }
+
+                        System.out.print("#");
+                    }
+
+                    System.out.println();
+                };
+
+        Thread progressBar = new Thread(progress);
+        progressBar.start();
+
+        BigInteger[] primes = getPrimes(bitLengths);
+        BigInteger p = primes[0];
+        BigInteger q = primes[1];
 
         BigInteger n = p.multiply(q);
         BigInteger ONE = BigInteger.ONE;
@@ -99,7 +127,7 @@ public class Main {
         }
 
         catch (Exception ex) {
-            System.out.println("[!] Internal BCrypt error.");
+            System.out.println("[!] Internal BCrypt error. Exiting...");
             System.exit(1);
         }
 
@@ -143,7 +171,7 @@ public class Main {
         }
 
         catch (IOException ex) {
-            System.out.println("[!] IOException when writing to keyfile " + keyfileOutName + ".");
+            System.out.println("[!] IOException when writing to keyfile " + keyfileOutName + ". Exiting...");
             System.exit(1);
         }
 
@@ -166,7 +194,7 @@ public class Main {
 
         File outfile = new File(outfileName);
         if (outfile.exists()) {
-            System.out.println("[!] Encrypted outfile " + outfileName + " already exists.");
+            System.out.println("[!] Encrypted outfile " + outfileName + " already exists. Exiting...");
             System.exit(1);
         }
 
@@ -180,7 +208,7 @@ public class Main {
             data = Files.readAllBytes(Path.of(filename));
 
         } catch (IOException ex) {
-            System.out.println("[!] IOException when reading file to encrypt " + filename + ".");
+            System.out.println("[!] IOException when reading file to encrypt " + filename + ". Exiting...");
             System.exit(1);
         }
 
@@ -197,7 +225,7 @@ public class Main {
             }
 
         } catch (IOException ex) {
-            System.out.println("[!] IOException when writing cipher to " + outfileName + ".");
+            System.out.println("[!] IOException when writing cipher to " + outfileName + ". Exiting...");
             System.exit(1);
         }
 
@@ -231,7 +259,7 @@ public class Main {
             data = Files.readAllLines(Path.of(filename));
 
         } catch (IOException ex) {
-            System.out.println("[!] IOException when reading the file to encrypt " + filename + ".");
+            System.out.println("[!] IOException when reading the file to encrypt " + filename + ". Exiting...");
             System.exit(1);
         }
 
@@ -284,7 +312,7 @@ public class Main {
                         }
 
                     } catch (IOException ex) {
-                        System.out.println("[!] IOException when reading from stdin.");
+                        System.out.println("[!] IOException when reading from stdin. Exiting...");
                         System.exit(1);
                     }
                 }
@@ -296,7 +324,7 @@ public class Main {
 
             File outfile = new File(outfileName);
             if (outfile.exists()) {
-                System.out.println("[!] Decripted outfile " + outfile + " already exists.");
+                System.out.println("[!] Decripted outfile " + outfile + " already exists. Exiting...");
                 System.exit(1);
             }
 
@@ -304,7 +332,7 @@ public class Main {
                 fos.write(plainArray);
 
             } catch (IOException ex) {
-                System.out.println("[!] Error when writing plain text to outfile " + outfile + ".");
+                System.out.println("[!] Error when writing plain text to outfile " + outfile + ". Exiting...");
                 System.exit(1);
             }
 

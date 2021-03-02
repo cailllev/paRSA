@@ -67,30 +67,6 @@ public class Main {
 
         int[] bitLengths = new int[] {lengthP, lengthQ};
 
-        int estimate = safePrimeBM(lengthN);
-        Runnable progress =
-                () -> {
-                    // time to complete one percent
-                    int stepTime = (int) (estimate / 100.0 / 1000.0);
-                    System.out.print("[*] Progress: ");
-
-                    // print one # every percent
-                    for (int i = 0; i < 100; i++) {
-                        try {
-                            TimeUnit.MILLISECONDS.sleep(1);
-                        } catch (InterruptedException ex) {
-                            continue;
-                        }
-
-                        System.out.print("#");
-                    }
-
-                    System.out.println();
-                };
-
-        Thread progressBar = new Thread(progress);
-        progressBar.start();
-
         BigInteger[] primes = getPrimes(bitLengths);
         BigInteger p = primes[0];
         BigInteger q = primes[1];

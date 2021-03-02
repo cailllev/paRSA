@@ -52,19 +52,33 @@ public class Primes {
      * Prints the estimate of how long the prime generation takes for 2 primes with bit length {@code bitLength}.
      * @param bitLength the bit length of the primes to generate
      */
-    protected static int safePrimeBM(int bitLength) {
-        long start = System.currentTimeMillis();
+    protected static void getPrimesBM(int bitLength, int count, boolean check) {
         int bitLengthBMExp = 8;
-        int bitLengthBM = 2 << bitLengthBMExp;  // 256
+        int bitLengthBM = 1 << bitLengthBMExp;  // 2^8 = 256
 
-        safePrime(bitLengthBM);
+        double avg = 0;
+        int bms = 10;
+        for (int i = 0; i < bms; i++) {
+            long start = System.currentTimeMillis();
 
-        double diff = (System.currentTimeMillis() - start) / 1000.0;
-        int estimate = (int) (diff * ((double) bitLength / bitLengthBMExp));
+            getPrimes(new int[] {bitLengthBM});
 
-        System.out.println("[*] Estimation to create safe primes for "
-                + bitLength + " bit RSA modulus: ~ " + estimate + "s.");
-        return estimate;
+            avg += System.currentTimeMillis() - start;
+        }
+        avg /= bms;
+
+        int estimate = count * (int) ((avg * Math.pow(1.6, (bitLength >> bitLengthBMExp)) / getThreadNumbers() / 80.0));
+        System.out.println("[*] Estimation to create " + count + " "
+                + bitLength + " safe prime(s): ~ " + estimate + "s.");
+
+        if (check) {
+            long start = System.currentTimeMillis();
+            getPrimes(new int[] {bitLength});
+            double diff = (int) ((System.currentTimeMillis() - start) / 1000.0);
+
+            System.out.println("[#] Actual time to create safe primes for "
+                    + bitLength + " bit RSA modulus: ~ " + diff + "s.");
+        }
     }
 
     /**
@@ -155,8 +169,7 @@ public class Primes {
                 callableTasks.add(callableTask);
             }
 
-
-            System.out.println("[*] Finding a safe prime with " + threadsCount + " threads..." );
+            // System.out.println("[*] Finding a " + bitLength + " bit safe prime with " + threadsCount + " threads..." );
             try {
                 primes[c] = executor.invokeAny(callableTasks);
             } catch (InterruptedException ex) {

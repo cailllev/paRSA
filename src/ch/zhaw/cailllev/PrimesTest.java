@@ -22,13 +22,13 @@ class PrimesTest {
     }
 
     @Test
-    void safePrimeBM() {
-        assertTrue(100 > Primes.safePrimeBM(10));
+    void getThreadNumbers() {
+        assertTrue(Primes.getThreadNumbers() >= 1);
     }
 
     @Test
-    void getThreadNumbers() {
-        assertTrue(Primes.getThreadNumbers() >= 1);
+    void getPrimesBM() {
+        Primes.getPrimesBM(2048, 1, true);
     }
 
     @Test

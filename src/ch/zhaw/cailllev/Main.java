@@ -12,7 +12,6 @@ import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 public class Main {
 
@@ -64,6 +63,10 @@ public class Main {
         int delta = 5 + secRandom.nextInt(10);
         int lengthP = lengthN / 2 + delta;
         int lengthQ = lengthN - lengthP + 1;
+
+        if (lengthN >= 1024) {
+            getPrimesBM(lengthN / 2, 2, false);
+        }
 
         int[] bitLengths = new int[] {lengthP, lengthQ};
 

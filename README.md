@@ -23,8 +23,8 @@ java ch.zhaw.cailllev.Main -h
 - no obvious weakness, see [here](Threat_Modelling.md)
 
 ## TODO
-- this project, but with Elliptic Curves instead RSA
-- add loading bar for prime gen instead of seconds
+- this project, but one with Elliptic Curves and one with Diffie Hellman instead RSA
+- create sign and verify logic
 
 ## Implementation Comments
 - read and write bytes to files, not as strings

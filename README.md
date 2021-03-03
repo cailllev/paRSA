@@ -3,14 +3,8 @@
 Uses RSA Algorithm to encrypt files. No private key is needed tho, only a password. The password is transformed to a bigger (prime) number, this is then used as the decriptor (d).
 
 ## Usage
-via jar file
 ```
 java -jar paRSA.jar
-```
-or via java class
-```
-cd out/production/paRSA
-java ch.zhaw.cailllev.Main -h
 ```
 - ```-i``` or ```--init``` to create a keyfile with given name
 - ```-k``` or ```--keyfile``` name of the keyfile, contains ```(n,e,diff)```

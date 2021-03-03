@@ -18,7 +18,7 @@ java -jar paRSA.jar
 
 ## TODO
 - this project, but one with Elliptic Curves and one with Diffie Hellman instead RSA
-- implement threads for encripting and decripting
+- check that encrypt and decrypt is faster with threads / create threshold for thread logic
 - create sign and verify logic
 
 ## Implementation Comments

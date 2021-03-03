@@ -126,21 +126,95 @@ public class Utils {
         return dIn;
     }
 
-    protected static byte[][] toChunks(byte[] bytes, int lengthN) {
-        int blockSize = lengthN / 8;  // n == 2048 -> 256 bytes per block
-        int blocks = (int) Math.ceil((double) bytes.length / blockSize);
+    /**
+     * https://stackoverflow.com/questions/1980832/how-to-scale-threads-according-to-cpu-cores#1980858
+     * @return "optimal" number of threads
+     */
+    protected static int getThreadNumbers() {
+        return Runtime.getRuntime().availableProcessors();
+    }
 
-        byte[][] hexArray = new byte[blocks][blockSize];
-        for (int i = 0; i < blocks - 1; i++) {
-            hexArray[i] = Arrays.copyOfRange(bytes, i * blockSize, (i + 1) * blockSize);
+    /**
+     * Splits up a one dimensional array into a 3 dimensional array. The first dimension is for the threads, the 2nd so
+     * that the bytes < n, and the last is for the individual bytes.
+     * @param bytes         the one dimensional array input
+     * @param lengthN       the bitLength of n
+     * @param threadCount   how many threads are available for processing
+     * @return  array[threads][blocksize][blocks]
+     */
+    protected static byte[][][] toChunks(byte[] bytes, int lengthN, int threadCount) {
+        // n == 2048 -> 256 bytes chunkSize
+        int chunkSize = (int) Math.ceil((double) lengthN / 8);
+
+        // 256 bytes chunkSize & 1000 input bytes -> 1000 / 256 = 4
+        int chunks = (int) Math.ceil((double) bytes.length / chunkSize);
+
+        byte[][] chunkedArray = new byte[chunks][chunkSize];
+        for (int i = 0; i < chunks - 1; i++) {
+            chunkedArray[i] = Arrays.copyOfRange(bytes, i * chunkSize, (i + 1) * chunkSize);
         }
 
         // add last block with padding
-        int start = (blocks-1)*blockSize;
+        int start = (chunks-1)*chunkSize;
         if (bytes.length - start >= 0)
-            System.arraycopy(bytes, start, hexArray[blocks - 1], 0, bytes.length - start);
+            System.arraycopy(bytes, start, chunkedArray[chunks -1], 0, bytes.length - start);
 
-        return hexArray;
+        // now split those arrays up for the threads
+        int[] chunksPerThread = splitElemsToThreads(threadCount, chunks);
+        threadCount = chunksPerThread.length;
+
+        byte[][][] threadChunkedArray = new byte[threadCount][][];
+        int chunksAllocated = 0;
+        for (int i = 0; i < threadCount; i++) {
+            int chunksToAdd = chunksPerThread[i];
+            threadChunkedArray[i] = Arrays.copyOfRange(chunkedArray, chunksAllocated, chunksAllocated + chunksToAdd);
+            chunksAllocated += chunksToAdd;
+        }
+
+        return threadChunkedArray;
+    }
+
+    protected static int[] splitElemsToThreads(int threadCount, int elemsCount) {
+        int[] elemsPerThread;
+
+        if (threadCount >= elemsCount) {
+            threadCount = elemsCount;
+
+            elemsPerThread = new int[threadCount];
+            Arrays.fill(elemsPerThread, 1);
+
+        } else {
+            // 6 elems, 4 threads -> t1 has 2 elems, t2 has 2 elems, t3 has 2 elems, t4 unused! -> 2 elems max
+            // 5 elems, 3 threads -> t1 has 2 elems, t2 has 2 elems, t3 has 1 chunk -> 2 elems max
+            // 7 elems, 3 threads -> t1 has 3 elems, t2 has 2 elems, t3 has 2 elems -> 3 elems max
+            int maxElemsPerThread = (int) Math.ceil((double) elemsCount / threadCount);
+
+            // ceil(6 / 2) = 3 --> 3 < 4  -> only 3 threads needed
+            // ceil(5 / 2) = 3 --> 3 !< 3 -> all 3 threads needed
+            // ceil(7 / 3) = 3 --> 3 !< 3 -> all 3 threads needed
+            if ((int) Math.ceil((double) elemsCount / maxElemsPerThread) < threadCount) {
+                threadCount = (int) Math.ceil((double) elemsCount / maxElemsPerThread);
+            }
+
+            // now split chunks to threads
+            elemsPerThread = new int[threadCount];
+            Arrays.fill(elemsPerThread, maxElemsPerThread);
+
+            // calc the chunks in the last thread
+            int chunksInLastThread =  elemsCount - (threadCount-1) * maxElemsPerThread;
+            elemsPerThread[threadCount -1] = chunksInLastThread;
+
+            // split the chunks equally
+            for (int i = threadCount - 2; i >= 0; i--) {
+                // check if other threads have more than one chunk more, i.e. 3,3,1 -> 3,2,2
+                if (elemsPerThread[i] > elemsPerThread[threadCount -1] + 1) {
+                    elemsPerThread[i]--;
+                    elemsPerThread[threadCount -1]++;
+                }
+            }
+        }
+
+        return elemsPerThread;
     }
 
     protected static KeyfileContent parseKeyfile(String keyfileName) {

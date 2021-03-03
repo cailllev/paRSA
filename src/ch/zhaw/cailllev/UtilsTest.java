@@ -1,5 +1,6 @@
 package ch.zhaw.cailllev;
 
+import org.junit.jupiter.api.Test;
 import org.mindrot.jbcrypt.BCrypt;
 
 import java.io.*;
@@ -50,30 +51,92 @@ class UtilsTest {
         }
     }
 
+    @Test
+    void getThreadNumbers() {
+        assertTrue(Utils.getThreadNumbers() >= 1);
+    }
+
+    @Test
+    void splitElemsToThreads() {
+        int elems, threads;
+        int[] ret, expected;
+
+        elems = 5;
+        threads = 3;
+        ret = Utils.splitElemsToThreads(threads, elems);
+        expected = new int[] {2, 2, 1};
+        for (int i = 0; i < ret.length; i++) {
+            assertEquals(ret[i], expected[i]);
+        }
+
+        elems = 6;
+        threads = 4;
+        ret = Utils.splitElemsToThreads(threads, elems);
+        expected = new int[] {2, 2, 2};
+        for (int i = 0; i < ret.length; i++) {
+            assertEquals(ret[i], expected[i]);
+        }
+
+        elems = 7;
+        threads = 3;
+        ret = Utils.splitElemsToThreads(threads, elems);
+        expected = new int[] {3, 2, 2};
+        for (int i = 0; i < ret.length; i++) {
+            assertEquals(ret[i], expected[i]);
+        }
+
+        elems = 7;
+        threads = 4;
+        ret = Utils.splitElemsToThreads(threads, elems);
+        expected = new int[] {2, 2, 2, 1};
+        for (int i = 0; i < ret.length; i++) {
+            assertEquals(ret[i], expected[i]);
+        }
+
+        elems = 9;
+        threads = 4;
+        ret = Utils.splitElemsToThreads(threads, elems);
+        expected = new int[] {3, 3, 3};
+        for (int i = 0; i < ret.length; i++) {
+            assertEquals(ret[i], expected[i]);
+        }
+
+        elems = 10;
+        threads = 4;
+        ret = Utils.splitElemsToThreads(threads, elems);
+        expected = new int[] {3, 3, 2, 2};
+        for (int i = 0; i < ret.length; i++) {
+            assertEquals(ret[i], expected[i]);
+        }
+    }
+
     @org.junit.jupiter.api.Test
     void toChunks() {
         int lengthN = 2048;
         int numBytes = lengthN / 8;
+        int threadCount = Utils.getThreadNumbers();
 
-        // test up to 4 blocks
-        for (int blocks = 1; blocks <= 4; blocks++) {
+        // test up to 12 chunks
+        for (int chunks = 1; chunks <= 12; chunks++) {
 
             // test every count of bytes
             for (int i = 1; i <= numBytes; i++) {
-                byte[] bytes = new byte[i + (blocks-1)*numBytes];
+                byte[] bytes = new byte[i + (chunks-1)*numBytes * threadCount];
 
                 Arrays.fill(bytes, (byte) 65);
 
-                byte[][] chunks = Utils.toChunks(bytes, lengthN);
+                byte[][][] chunked = Utils.toChunks(bytes, lengthN, threadCount);
 
-                // test num of blocks and length of last block
-                assertEquals(blocks, chunks.length);
-                assertEquals(numBytes, chunks[chunks.length - 1].length);
+                int actualThreads = chunked.length;
+                int lastThreadLastChunk = chunked[actualThreads - 1].length - 1;
 
-                // count padding bytes
+                // test threads
+                assertTrue(threadCount >= actualThreads);
+
+                // count padding bytes and length of last block
                 int countPadding = 0;
                 int countAs = 0;
-                for (Byte b : chunks[chunks.length - 1]) {
+                for (Byte b : chunked[actualThreads - 1][lastThreadLastChunk]) {
                     if (b == 0)
                         countPadding++;
                     else

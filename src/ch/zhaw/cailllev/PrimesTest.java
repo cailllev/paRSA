@@ -22,11 +22,6 @@ class PrimesTest {
     }
 
     @Test
-    void getThreadNumbers() {
-        assertTrue(Primes.getThreadNumbers() >= 1);
-    }
-
-    @Test
     void getPrimesBM() {
         Primes.getPrimesBM(2048, 1, true);
     }

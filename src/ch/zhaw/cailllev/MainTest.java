@@ -20,13 +20,16 @@ class MainTest {
         // set up
         int lengthN = 2048;
         String password = "A";
+        Files.deleteIfExists(Path.of(keyfileNameOut));
         Main.initKeyfile(keyfileName, password, lengthN, 16);
 
         String content = "######################\nmy super test file\nmy super test file\n\n######################\n";
 
+        Files.deleteIfExists(Path.of(fileToEncrypt));
         Files.writeString(Path.of(fileToEncrypt), content);
 
         // encryption
+        Files.deleteIfExists(Path.of(fileToEncryptOut));
         Main.encrypt(fileToEncrypt, keyfileNameOut);
 
         // delete plain file, so decrypt can save one

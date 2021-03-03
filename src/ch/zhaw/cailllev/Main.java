@@ -11,7 +11,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.*;
 
 public class Main {
 
@@ -191,16 +193,46 @@ public class Main {
             System.exit(1);
         }
 
-        byte[][] mBytes = toChunks(data, lengthN);
+        int threadCount = getThreadNumbers();
+        byte[][][] mBytes = toChunks(data, lengthN, threadCount);
+        threadCount = mBytes.length;
+
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+
+        List<BigInteger[]> encrypted = new ArrayList<>();
+        List<Future<BigInteger[]>> encryptedFutures = new ArrayList<>();
+        List<Callable<BigInteger[]>> callableTasks = new ArrayList<>();
+
+        // encrypt for each thread
+        for (int i = 0; i < threadCount; i++) {
+            byte[][] toEncrypt = mBytes[i];
+            Callable<BigInteger[]> callableTask = () -> encryptBytes(toEncrypt, n, e);
+            callableTasks.add(callableTask);
+        }
+
+        // System.out.println("[*] Finding a " + bitLength + " bit safe prime with " + threadsCount + " threads..." );
+        try {
+            encryptedFutures = executor.invokeAll(callableTasks);
+            for (Future<BigInteger[]> future : encryptedFutures) {
+                encrypted.add(future.get());
+            }
+
+        } catch (InterruptedException ex) {
+            System.out.println("[!] Thread was interrupted when encrypting. Exiting...");
+            System.exit(1);
+        } catch (ExecutionException ex) {
+            System.out.println("[!] Thread encountered exception when encrypting. Exiting...");
+            System.exit(1);
+        }
+
+        executor.shutdown();
 
         //m^e mod n
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(outfileName))) {
-            BigInteger m, c;
-            for (byte[] bytes : mBytes) {
-                m = new BigInteger(1, bytes);
-                c = m.modPow(e, n);
-
-                writer.write(c.toString() + "\n");
+            for (BigInteger[] bs : encrypted) {
+                for (BigInteger b : bs) {
+                    writer.write(b.toString() + "\n");
+                }
             }
 
         } catch (IOException ex) {
@@ -209,6 +241,27 @@ public class Main {
         }
 
         System.out.println("[*] Successfully encrypted contents of " + filename + " and saved them under " + outfile);
+    }
+
+    /**
+     * Gets bytes (another represantation of BigInteger), n and e and encrypts it according to the RSA algorithmn.
+     * @param mBytes    the BigIntegers as byte[][]
+     * @param n         the modulus
+     * @param e         the exponent
+     * @return  m ^ e % n
+     */
+    private static BigInteger[] encryptBytes(byte[][] mBytes, BigInteger n, BigInteger e) {
+        BigInteger[] ms = new BigInteger[mBytes.length];
+
+        BigInteger m, c;
+        for (int i = 0; i < ms.length; i++) {
+            m = new BigInteger(1, mBytes[i]);
+            c = m.modPow(e, n);
+
+            ms[i] = c;
+        }
+
+        return ms;
     }
 
     protected static void decrypt(String filename, String keyfileName, boolean show, boolean save, String password) {
@@ -242,16 +295,56 @@ public class Main {
             System.exit(1);
         }
 
-        // #c^d mod n
-        ArrayList<Byte> plain = new ArrayList<>();
-        for (String cS : data) {
-            BigInteger c = new BigInteger(cS);
+        int threadCount = Utils.getThreadNumbers();
 
-            BigInteger m = c.modPow(d, n);
+        // split data to threads
+        String[] dataArray = new String[data.size()];
+        dataArray = data.toArray(dataArray);
+        int[] stringsPerThread = splitElemsToThreads(threadCount, data.size());
+        threadCount = stringsPerThread.length;
 
-            for (Byte b : m.toByteArray()) {
-                plain.add(b);
+        String[][] stringsSplit = new String[threadCount][];
+        int chunksAllocated = 0;
+
+        for (int i = 0; i < threadCount; i++) {
+            int chunksToAdd = stringsPerThread[i];
+            stringsSplit[i] = Arrays.copyOfRange(dataArray, chunksAllocated, chunksAllocated + chunksToAdd);
+            chunksAllocated += chunksToAdd;
+        }
+
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+
+        List<List<Byte>> plainArrays = new ArrayList<>();
+        List<Future<List<Byte>>> encryptedFutures = new ArrayList<>();
+        List<Callable<List<Byte>>> callableTasks = new ArrayList<>();
+
+        // decrypt for each thread
+        BigInteger finalD = d;
+        for (int i = 0; i < threadCount; i++) {
+            String[] toDecrypt = stringsSplit[i];
+            Callable<List<Byte>> callableTask = () -> decryptBytes(toDecrypt, n, finalD);
+            callableTasks.add(callableTask);
+        }
+
+        try {
+            encryptedFutures = executor.invokeAll(callableTasks);
+            for (Future<List<Byte>> future : encryptedFutures) {
+                plainArrays.add(future.get());
             }
+
+        } catch (InterruptedException ex) {
+            System.out.println("[!] Thread was interrupted when encrypting. Exiting...");
+            System.exit(1);
+        } catch (ExecutionException ex) {
+            System.out.println("[!] Thread encountered exception when encrypting. Exiting...");
+            System.exit(1);
+        }
+
+        executor.shutdown();
+
+        List<Byte> plain = new ArrayList<>();
+        for (List<Byte> bL : plainArrays) {
+            plain.addAll(bL);
         }
 
         // remove padding, i.e. trailing 0 bytes
@@ -281,7 +374,7 @@ public class Main {
                 System.out.println("[*] The plain text cannot be shown (not in ASCII format).");
 
                 if (!save) {
-                    System.out.println("[*] The plain text is cuurently not getting saved, save it? [Y/n]");
+                    System.out.println("[*] The plain text is currently not getting saved, save it? [Y/n]");
 
                     try {
                         BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
@@ -317,6 +410,28 @@ public class Main {
 
             System.out.println("[*] Contents saved in " + outfile + ".");
         }
+    }
+
+    /**
+     * Gets BigIntegers as Strings, n and d and decrypts them according to the RSA algorithmn.
+     * @param data      the BigIntegers as Strings
+     * @param n         the modulus
+     * @param d         the exponent
+     * @return  c ^ d % n -> all as bytes in one array
+     */
+    private static List<Byte> decryptBytes(String[] data, BigInteger n, BigInteger d) {
+        List<Byte> plain = new ArrayList<>();
+        for (String cS : data) {
+            BigInteger c = new BigInteger(cS);
+
+            BigInteger m = c.modPow(d, n);
+
+            for (Byte b : m.toByteArray()) {
+                plain.add(b);
+            }
+        }
+
+        return plain;
     }
 
 

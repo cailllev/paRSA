@@ -67,7 +67,8 @@ public class Primes {
         }
         avg /= bms;
 
-        int estimate = count * (int) ((avg * Math.pow(1.6, (bitLength >> bitLengthBMExp)) / getThreadNumbers() / 80.0));
+        int threadCount = Utils.getThreadNumbers();
+        int estimate = count * (int) ((avg * Math.pow(1.6, (bitLength >> bitLengthBMExp)) / threadCount / 80.0));
         System.out.println("[*] Estimation to create " + count + " "
                 + bitLength + " safe prime(s): ~ " + estimate + "s.");
 
@@ -136,13 +137,6 @@ public class Primes {
 
         return p;
     }
-    /**
-     * https://stackoverflow.com/questions/1980832/how-to-scale-threads-according-to-cpu-cores#1980858
-     * @return "optimal" number of threads
-     */
-    protected static int getThreadNumbers() {
-        return Runtime.getRuntime().availableProcessors();
-    }
 
     /**
      * https://www.baeldung.com/java-executor-service-tutorial
@@ -152,7 +146,7 @@ public class Primes {
      * @return safe prime numbers
      */
     protected static BigInteger[] getPrimes(int[] bitLengths) {
-        int threadsCount = getThreadNumbers();
+        int threadsCount = Utils.getThreadNumbers();
         int primesCount = bitLengths.length;
         BigInteger[] primes = new BigInteger[bitLengths.length];
 

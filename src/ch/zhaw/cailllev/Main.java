@@ -200,7 +200,7 @@ public class Main {
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 
         List<BigInteger[]> encrypted = new ArrayList<>();
-        List<Future<BigInteger[]>> encryptedFutures = new ArrayList<>();
+        List<Future<BigInteger[]>> encryptedFutures;
         List<Callable<BigInteger[]>> callableTasks = new ArrayList<>();
 
         // encrypt for each thread
@@ -315,7 +315,7 @@ public class Main {
         ExecutorService executor = Executors.newFixedThreadPool(threadCount);
 
         List<List<Byte>> plainArrays = new ArrayList<>();
-        List<Future<List<Byte>>> encryptedFutures = new ArrayList<>();
+        List<Future<List<Byte>>> encryptedFutures;
         List<Callable<List<Byte>>> callableTasks = new ArrayList<>();
 
         // decrypt for each thread

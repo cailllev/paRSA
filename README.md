@@ -18,6 +18,7 @@ java -jar paRSA.jar
 
 ## TODO
 - this project, but one with Elliptic Curves and one with Diffie Hellman instead RSA
+- implement threads for encripting and decripting
 - create sign and verify logic
 
 ## Implementation Comments

@@ -20,6 +20,3 @@ java -jar paRSA.jar
 - this project, but one with Elliptic Curves and one with Diffie Hellman instead RSA
 - check that encrypt and decrypt is faster with threads / create threshold for thread logic
 - create sign and verify logic
-
-## Implementation Comments
-- read and write bytes to files, not as strings
